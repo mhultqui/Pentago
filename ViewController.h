@@ -16,10 +16,13 @@
 
 
     NSArray *boardViews;
-    NSArray *subBoardArrays;
+    NSArray *subBoardButtons;
     
+    int board[4][9];
     float rotations[4];
     int subIndex;
+    BOOL whitesMove;
+    BOOL pieceSet;
     
     CGFloat height;
     CGFloat width;

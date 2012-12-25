@@ -12,6 +12,7 @@
 
 - (IBAction)newGameSelected:(id)sender{
     NSLog(@"new game");
+    [self resetBoard];
 }
 - (IBAction)setMoveSelected:(id)sender{
     NSLog(@"set move");
@@ -49,23 +50,23 @@
     UIView *board4 = [[UIView alloc]initWithFrame:CGRectMake(width/2.0+1, b2+1, side, side)];
     
     boardViews = [[NSArray alloc]initWithObjects:board1,board2,board3,board4, nil];
-    rotations[0] = 0.0f;
-    rotations[1] = 0.0f;
-    rotations[2] = 0.0f;
-    rotations[3] = 0.0f;
 
-    subBoardArrays = [[NSArray alloc]initWithObjects:
-                      [self setupSubboard:board1],
-                      [self setupSubboard:board2],
-                      [self setupSubboard:board3],
-                      [self setupSubboard:board4], nil];
+    subBoardButtons = [[NSArray alloc]initWithObjects:
+                      [self setupSubboard:board1:0],
+                      [self setupSubboard:board2:1],
+                      [self setupSubboard:board3:2],
+                      [self setupSubboard:board4:3], nil];
+    
+    [self resetBoard];
 }
-
+- (NSMutableArray *)emptyArray{
+    return [NSMutableArray arrayWithCapacity:9];
+}
 - (int)scale:(int)num{
     return num * height/1004.0;
 }
 
-- (NSMutableArray *) setupSubboard:(UIView *)subboard{
+- (NSMutableArray *) setupSubboard:(UIView *)subboard:(int)outerTag{
     CGFloat size = subboard.bounds.size.width;
     CGFloat imagesize = size/3.0;
     NSMutableArray *temp = [[NSMutableArray alloc]initWithCapacity:9];
@@ -73,13 +74,16 @@
     for(int i = 0; i<3; i++){
         for( int j = 0; j<3;j++){
             CGRect imagerect = CGRectMake(imagesize*j, imagesize*i, imagesize-1, imagesize-1);
-            UIImageView *place = [[UIImageView alloc]initWithFrame:imagerect];
-            if(i && j){
-                place.image = [UIImage imageNamed:@"sq-bar.jpg"];
-            }
-            else{
-                place.image = [UIImage imageNamed:@"sq-white.jpg"];
-            }
+            
+            UIButton *place = [UIButton buttonWithType:UIButtonTypeCustom];                
+            [place addTarget:self action:@selector(tapped:)
+                forControlEvents:UIControlEventTouchUpInside];
+            place.frame = imagerect;
+            place.tag = 100*outerTag + (10*i)+j;
+
+            [self.view addSubview:place];
+
+            [place setImage:[UIImage imageNamed:@"sq-brown.jpg"] forState:UIControlStateNormal];
             place.layer.cornerRadius = imagesize/2.0;
             [place.layer setMasksToBounds:YES];
             [place.layer setAnchorPoint:CGPointMake(0.5,0.5)];
@@ -91,6 +95,30 @@
     [subboard.layer setAnchorPoint:CGPointMake(0.5,0.5)];
     [self.view addSubview:subboard];
     return temp;
+}
+
+- (IBAction)tapped:(id)sender{
+    UIButton *place = (UIButton *)sender;
+    int tagnum = place.tag;
+    int outer = tagnum / 100;
+    int row = (tagnum % 100) / 10;
+    int col = (tagnum % 10);
+    int idx = 3*row+col;
+    
+    UIButton *button = [[subBoardButtons objectAtIndex:outer]objectAtIndex:idx];
+    
+    if(! board[outer][idx] && ! pieceSet){
+        if(whitesMove){
+            board[outer][idx] = 1;
+            [button setImage:[UIImage imageNamed:@"sq-bar.jpg"] forState:UIControlStateNormal];
+        }
+        else{
+            board[outer][idx] = -1;
+            [button setImage:[UIImage imageNamed:@"sq-black.jpg"] forState:UIControlStateNormal];
+        }
+        pieceSet = true;
+        whitesMove = !whitesMove;
+    }
 }
 
 - (void)createButtons{
@@ -110,17 +138,37 @@
 
 }
 - (IBAction)rotateC:(id)sender{
-    UIView * subboard = [boardViews objectAtIndex:subIndex];
-    NSArray *places = [subBoardArrays objectAtIndex:subIndex];
-    rotations[subIndex] += M_PI/12;
-    [self rotateSubboard:subboard :places :rotations[subIndex]];
+    rotations[subIndex] += M_PI / 2;
+    [self fullRotate:sender];
 }
 - (IBAction)rotateCC:(id)sender{
-    UIView * subboard = [boardViews objectAtIndex:subIndex];
-    NSArray *places = [subBoardArrays objectAtIndex:subIndex];
-    rotations[subIndex] -= M_PI/12;
-    [self rotateSubboard:subboard :places :rotations[subIndex]];
+    rotations[subIndex] -= M_PI / 2;
+    [self fullRotate:sender];
 }
+- (IBAction)fullRotate:(id)sender{
+    pieceSet = false;
+    [self rotateForDuration:1 radians:rotations[subIndex]];
+}
+
+- (void)rotateForDuration:(NSTimeInterval)dur radians:(CGFloat)rot{
+    [UIView beginAnimations:nil context:NULL];
+    [UIView setAnimationDuration:dur];
+    [UIView setAnimationCurve:UIViewAnimationCurveEaseIn];
+    [UIView setAnimationBeginsFromCurrentState:YES];
+    
+    CGAffineTransform trans1 = CGAffineTransformMakeRotation(rot);
+    CGAffineTransform trans2 = CGAffineTransformMakeRotation(-rot);
+    
+    UIView *view = [boardViews objectAtIndex:subIndex];
+    view.transform = trans1;
+    for(int i=0;i<9;i++){
+        UIButton *button = [[subBoardButtons objectAtIndex:subIndex]objectAtIndex:i];
+        button.transform = trans2;
+    }
+    
+    [UIView commitAnimations];
+}
+
 - (IBAction)subSwitch:(id)sender{
     subIndex++;
     subIndex = subIndex % 4;
@@ -132,7 +180,7 @@
     
     subboard.layer.transform = clockwise;
     for(int i = 0;i<[places count];i++){
-        UIImageView *im = [places objectAtIndex:i];
+        UIButton *im = [places objectAtIndex:i];
         im.layer.transform = counterClock;
     }
 }
@@ -153,7 +201,23 @@
 }
 
 - (void)resetBoard{
+    rotations[0] = 0.0f;
+    rotations[1] = 0.0f;
+    rotations[2] = 0.0f;
+    rotations[3] = 0.0f;
     
+    for(int idx=0;idx < 4; idx++){
+        [self rotateSubboard:[boardViews objectAtIndex:idx]:
+                            [subBoardButtons objectAtIndex:idx]:
+                            rotations[idx]];
+        for(int i = 0;i<9;i++){
+            board[idx][i] = 0;
+            [[[subBoardButtons objectAtIndex:idx]objectAtIndex:i]
+                            setImage:[UIImage imageNamed:@"sq-brown.jpg"]
+                            forState:UIControlStateNormal];
+        }
+    }
+    whitesMove = true;
 }
 - (void)viewDidUnload
 {
@@ -164,6 +228,6 @@
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
 {
     return UIInterfaceOrientationIsPortrait(interfaceOrientation);
-}
+}                                                        
 
 @end
